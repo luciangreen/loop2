@@ -29,7 +29,7 @@ loop2_analyse(Input, plan(BaseLists, Loops, MainPredicate)) :-
     phrase(base_lists(Facts), BaseLists),
     member((Head :- Body), Clauses),
     Body = findall(Template, Goal, Result),
-    supported_generator(Goal, Facts, BaseName, ItemVar, Transform),
+    supported_generator(Goal, Clauses, Facts, BaseName, ItemVar, Transform),
     MainPredicate = main(Head, BaseName, Result),
     Loops = [loop(1, xs, ys, transform(ItemVar, Template, Transform))].
 
@@ -112,14 +112,31 @@ group_unary_facts(Facts, Grouped) :-
         ),
         Grouped).
 
-supported_generator((Generator, Transform), Facts, BaseName, ItemVar, Transform) :-
+% Rule C — Nested findall + member (flatten_loop_pipeline optimisation)
+supported_generator((findall(Inner, InnerGoal, List), member(Item, List)), Clauses, Facts, BaseName, Inner, true) :-
     !,
-    supported_generator(Generator, Facts, BaseName, ItemVar, true).
-supported_generator(Generator, Facts, BaseName, ItemVar, true) :-
+    Item = Inner,
+    supported_generator(InnerGoal, Clauses, Facts, BaseName, Inner, true).
+
+% Rule B — Generator followed by a transform
+supported_generator((Generator, Transform), Clauses, Facts, BaseName, ItemVar, Transform) :-
+    !,
+    supported_generator(Generator, Clauses, Facts, BaseName, ItemVar, true).
+
+% Rule B — Simple unary fact generator
+supported_generator(Generator, _Clauses, Facts, BaseName, ItemVar, true) :-
     Generator =.. [Pred, ItemVar],
     member(Fact, Facts),
     Fact =.. [Pred, _],
     base_list_name(Pred, BaseName).
+
+% Rule D — Splice a supported nested predicate (splice_supported_nested_predicate optimisation)
+supported_generator(Goal, Clauses, Facts, BaseName, ItemVar, Transform) :-
+    Goal =.. [Pred | _],
+    Pred \= ',',
+    \+ (member(Fact, Facts), functor(Fact, Pred, _)),
+    member((Goal :- Body), Clauses),
+    supported_generator(Body, Clauses, Facts, BaseName, ItemVar, Transform).
 
 base_list_name(Pred, BaseName) :-
     atom_concat(Pred, s, BaseName).
