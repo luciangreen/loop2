@@ -25,23 +25,49 @@ loop2_file(InputFile, OutputFile) :-
         close(Stream)
     ).
 
-loop2_analyse(Input, plan(BaseLists, Loops, MainPredicate)) :-
+loop2_analyse(Input, plan(BaseLists, Pipelines)) :-
     normalise_clauses(Input, Clauses),
     clause_facts(Clauses, Facts),
     collect_base_lists(Facts, BaseLists),
-    member((Head :- Body), Clauses),
-    Body = findall(Template, Goal, Result),
-    supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform),
-    MainPredicate = main(Head, Source, Result),
-    Loops = [loop(1, xs, ys, transform(ItemVar, Template, Transform))].
+    findall(pipeline(Head, Source,
+                     [loop(1, _InputVar, FinalOutput,
+                           transform(ItemVar, Template, Transform))],
+                     FinalOutput),
+        ( member((Head :- Body), Clauses),
+          Body = findall(Template, Goal, FinalOutput),
+          once(supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform))
+        ),
+        Pipelines),
+    Pipelines \= [].
 
-loop2_emit(plan(BaseLists, [loop(1, _, _, transform(ItemVar, Template, Transform))], main(Head, Source, Result)), OutputAtom) :-
+loop2_emit(plan(BaseLists, Pipelines), OutputAtom) :-
     emit_base_list_clauses(BaseLists, BaseListClauses),
-    loop_name(1, LoopName),
-    main_clause(Head, Source, Result, LoopName, MainClause),
-    loop_clauses(LoopName, ItemVar, Template, Transform, LoopClauses),
-    append([BaseListClauses, [MainClause], LoopClauses], Clauses),
-    clauses_atom(Clauses, OutputAtom).
+    emit_pipelines(Pipelines, PipelineClauses),
+    append(BaseListClauses, PipelineClauses, AllClauses),
+    clauses_atom(AllClauses, OutputAtom).
+
+emit_pipelines([], []).
+emit_pipelines([Pipeline|Rest], Clauses) :-
+    emit_pipeline(Pipeline, PClauses),
+    emit_pipelines(Rest, RestClauses),
+    append(PClauses, RestClauses, Clauses).
+
+emit_pipeline(pipeline(Head, Source,
+                       [loop(Id, InputVar, FinalOutput,
+                             transform(ItemVar, Template, Transform))],
+                       FinalOutput),
+              [MainClause|LoopClauses]) :-
+    loop_name(Id, LoopName),
+    pipeline_main_clause(Head, Source, InputVar, FinalOutput, LoopName, MainClause),
+    loop_clauses(LoopName, ItemVar, Template, Transform, LoopClauses).
+
+pipeline_main_clause(Head, base_list(BaseName), InputVar, FinalOutput, LoopName,
+                     (Head :- (BaseCall, LoopCall))) :-
+    BaseCall =.. [BaseName, InputVar],
+    LoopCall =.. [LoopName, InputVar, FinalOutput].
+pipeline_main_clause(Head, input_list(List), _InputVar, FinalOutput, LoopName,
+                     (Head :- LoopCall)) :-
+    LoopCall =.. [LoopName, List, FinalOutput].
 
 parse_input(Input, Clauses) :-
     (   string(Input)
@@ -59,6 +85,7 @@ detect_unsupported(Clauses, Reason) :-
 
 unsupported_term(Term, Reason) :-
     sub_term(SubTerm, Term),
+    nonvar(SubTerm),
     unsupported_subterm(SubTerm, Reason),
     !.
 
@@ -186,12 +213,6 @@ supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform) :-
 
 base_list_name(Pred, BaseName) :-
     atom_concat(Pred, s, BaseName).
-
-main_clause(Head, base_list(BaseName), Result, LoopName, (Head :- (BaseCall, LoopCall))) :-
-    BaseCall =.. [BaseName, Xs],
-    LoopCall =.. [LoopName, Xs, Result].
-main_clause(Head, input_list(List), Result, LoopName, (Head :- LoopCall)) :-
-    LoopCall =.. [LoopName, List, Result].
 
 loop_clauses(LoopName, ItemVar, Template, Transform, [BaseClause, StepClause]) :-
     BaseClause =.. [LoopName, [], []],
