@@ -28,7 +28,7 @@ loop2_file(InputFile, OutputFile) :-
 loop2_analyse(Input, plan(BaseLists, Loops, MainPredicate)) :-
     normalise_clauses(Input, Clauses),
     clause_facts(Clauses, Facts),
-    phrase(base_lists(Facts), BaseLists),
+    collect_base_lists(Facts, BaseLists),
     member((Head :- Body), Clauses),
     Body = findall(Template, Goal, Result),
     supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform),
@@ -36,10 +36,11 @@ loop2_analyse(Input, plan(BaseLists, Loops, MainPredicate)) :-
     Loops = [loop(1, xs, ys, transform(ItemVar, Template, Transform))].
 
 loop2_emit(plan(BaseLists, [loop(1, _, _, transform(ItemVar, Template, Transform))], main(Head, Source, Result)), OutputAtom) :-
+    emit_base_list_clauses(BaseLists, BaseListClauses),
     loop_name(1, LoopName),
     main_clause(Head, Source, Result, LoopName, MainClause),
     loop_clauses(LoopName, ItemVar, Template, Transform, LoopClauses),
-    append([BaseLists, [MainClause], LoopClauses], Clauses),
+    append([BaseListClauses, [MainClause], LoopClauses], Clauses),
     clauses_atom(Clauses, OutputAtom).
 
 parse_input(Input, Clauses) :-
@@ -119,18 +120,22 @@ clause_facts(Clauses, Facts) :-
         ),
         Facts).
 
-base_lists(Facts) -->
-    { group_unary_facts(Facts, Grouped) },
-    emit_base_lists(Grouped).
+collect_base_lists(Facts, BaseLists) :-
+    group_unary_facts(Facts, Grouped),
+    findall(base_list(BaseName, Values),
+        ( member(group(Name, Values), Grouped),
+          Values \= [],
+          base_list_name(Name, BaseName)
+        ),
+        BaseLists).
 
-emit_base_lists([]) --> [].
-emit_base_lists([group(Name, Values)|Rest]) -->
-    { Values \= [],
-      base_list_name(Name, BaseName),
-      Clause =.. [BaseName, Values]
-    },
-    [Clause],
-    emit_base_lists(Rest).
+emit_base_list_clauses([], []).
+emit_base_list_clauses([base_list(BaseName, Values)|Rest], [Clause|Clauses]) :-
+    !,
+    Clause =.. [BaseName, Values],
+    emit_base_list_clauses(Rest, Clauses).
+emit_base_list_clauses([Clause|Rest], [Clause|Clauses]) :-
+    emit_base_list_clauses(Rest, Clauses).
 
 group_unary_facts(Facts, Grouped) :-
     findall(Name,
