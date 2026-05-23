@@ -1,3 +1,4 @@
+```
 loop2 — Prolog Program Requirements
 
 loop2 is a Prolog-to-Prolog translator that converts a small, supported subset of nondeterministic Prolog into deterministic Prolog by replacing nondeterministic generators with explicit list loops. It extends the existing findall/3 conversion idea, where nested findall calls are already translated into numbered recursive predicates such as findall001/2, findall002/2, etc.  ￼
@@ -198,3 +199,4 @@ It does not claim to preserve full Prolog backtracking semantics.
 9. Suggested Repository Description
 
 loop2 is a minimal Prolog-to-Prolog translator that converts simple nondeterministic Prolog patterns into deterministic recursive loop predicates. It combines findall/3 elimination, loop flattening, and simple nested predicate splicing to produce clearer deterministic Prolog for education, optimisation, and later pl2c/pl2js compilation.
+```
