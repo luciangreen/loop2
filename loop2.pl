@@ -181,35 +181,44 @@ group_unary_facts(Facts, Grouped) :-
         ),
         Grouped).
 
-% Rule C — Nested findall + member (flatten_loop_pipeline optimisation)
-supported_generator((findall(Inner, InnerGoal, List), member(Item, List)), Clauses, Facts, Source, Inner, true) :-
-    !,
-    Item = Inner,
-    supported_generator(InnerGoal, Clauses, Facts, Source, Inner, true).
-
-% Rule B — Generator followed by a transform
-supported_generator((Generator, Transform), Clauses, Facts, Source, ItemVar, Transform) :-
-    !,
-    supported_generator(Generator, Clauses, Facts, Source, ItemVar, true).
-
-% Rule B — Direct list generator
-supported_generator(member(ItemVar, List), _Clauses, _Facts, input_list(List), ItemVar, true) :-
-    !.
-
-% Rule B — Simple unary fact generator
-supported_generator(Generator, _Clauses, Facts, base_list(BaseName), ItemVar, true) :-
+% Optimisation: findall_to_loop
+% Converts a direct member/fact generator, with optional transform, to a loop source.
+findall_to_loop(member(ItemVar, List), _Clauses, _Facts,
+                input_list(List), ItemVar, true) :- !.
+findall_to_loop(Generator, _Clauses, Facts, base_list(BaseName), ItemVar, true) :-
     Generator =.. [Pred, ItemVar],
     member(Fact, Facts),
     Fact =.. [Pred, _],
+    !,
     base_list_name(Pred, BaseName).
+findall_to_loop((Generator, Transform), Clauses, Facts, Source, ItemVar, Transform) :-
+    supported_generator(Generator, Clauses, Facts, Source, ItemVar, true).
 
-% Rule D — Splice a supported nested predicate (splice_supported_nested_predicate optimisation)
-supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform) :-
+% Optimisation: flatten_loop_pipeline
+% Flattens a nested findall+member pattern into a single-pass loop.
+flatten_loop_pipeline((findall(Inner, InnerGoal, List), member(Item, List)),
+                       Clauses, Facts, Source, Inner, true) :-
+    Item = Inner,
+    supported_generator(InnerGoal, Clauses, Facts, Source, Inner, true).
+
+% Optimisation: splice_supported_nested_predicate
+% Inlines the body of a supported single-clause predicate into the current pipeline.
+splice_supported_nested_predicate(Goal, Clauses, Facts, Source, ItemVar, Transform) :-
     Goal =.. [Pred | _],
     Pred \= ',',
     \+ (member(Fact, Facts), functor(Fact, Pred, _)),
     member((Goal :- Body), Clauses),
     supported_generator(Body, Clauses, Facts, Source, ItemVar, Transform).
+
+% Generator dispatcher: applies optimisations in priority order.
+supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform) :-
+    flatten_loop_pipeline(Goal, Clauses, Facts, Source, ItemVar, Transform),
+    !.
+supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform) :-
+    findall_to_loop(Goal, Clauses, Facts, Source, ItemVar, Transform),
+    !.
+supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform) :-
+    splice_supported_nested_predicate(Goal, Clauses, Facts, Source, ItemVar, Transform).
 
 base_list_name(Pred, BaseName) :-
     atom_concat(Pred, s, BaseName).
