@@ -9,7 +9,9 @@
 
 loop2_translate(InputAtom, OutputAtom) :-
     parse_input(InputAtom, Clauses),
-    (   loop2_analyse(Clauses, Plan)
+    (   detect_unsupported(Clauses, Reason)
+    ->  unsupported_output(Reason, OutputAtom)
+    ;   loop2_analyse(Clauses, Plan)
     ->  loop2_emit(Plan, OutputAtom)
     ;   unsupported_output(unsupported_shape, OutputAtom)
     ).
@@ -48,6 +50,41 @@ parse_input(Input, Clauses) :-
         read_clauses_from_string(Text, Clauses)
     ;   normalise_clauses(Input, Clauses)
     ).
+
+detect_unsupported(Clauses, Reason) :-
+    member(Clause, Clauses),
+    unsupported_term(Clause, Reason),
+    !.
+
+unsupported_term(Term, Reason) :-
+    sub_term(SubTerm, Term),
+    unsupported_subterm(SubTerm, Reason),
+    !.
+
+unsupported_subterm(!, cut).
+unsupported_subterm((_ ; _), disjunction).
+unsupported_subterm((_ -> _), if_then).
+unsupported_subterm((\+ _), negation).
+unsupported_subterm(var(_), var_sensitive).
+unsupported_subterm(repeat, infinite_generator).
+unsupported_subterm(SubTerm, meta_call) :-
+    compound(SubTerm),
+    functor(SubTerm, call, Arity),
+    Arity >= 1.
+unsupported_subterm(SubTerm, assert_retract) :-
+    compound(SubTerm),
+    functor(SubTerm, Pred, _),
+    memberchk(Pred, [assert, asserta, assertz, retract, retractall]).
+unsupported_subterm(SubTerm, side_effect(Pred)) :-
+    compound(SubTerm),
+    functor(SubTerm, Pred, _),
+    memberchk(Pred,
+        [ write, writeq, writeln, format, print, nl,
+          put_char, put_code, get_char, get_code,
+          read, read_term, open, close,
+          tell, told, see, seen,
+          shell, halt
+        ]).
 
 read_clauses_from_string(Text, Clauses) :-
     setup_call_cleanup(
