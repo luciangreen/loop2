@@ -31,13 +31,13 @@ loop2_analyse(Input, plan(BaseLists, Loops, MainPredicate)) :-
     phrase(base_lists(Facts), BaseLists),
     member((Head :- Body), Clauses),
     Body = findall(Template, Goal, Result),
-    supported_generator(Goal, Clauses, Facts, BaseName, ItemVar, Transform),
-    MainPredicate = main(Head, BaseName, Result),
+    supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform),
+    MainPredicate = main(Head, Source, Result),
     Loops = [loop(1, xs, ys, transform(ItemVar, Template, Transform))].
 
-loop2_emit(plan(BaseLists, [loop(1, _, _, transform(ItemVar, Template, Transform))], main(Head, BaseName, Result)), OutputAtom) :-
+loop2_emit(plan(BaseLists, [loop(1, _, _, transform(ItemVar, Template, Transform))], main(Head, Source, Result)), OutputAtom) :-
     loop_name(1, LoopName),
-    main_clause(Head, BaseName, Result, LoopName, MainClause),
+    main_clause(Head, Source, Result, LoopName, MainClause),
     loop_clauses(LoopName, ItemVar, Template, Transform, LoopClauses),
     append([BaseLists, [MainClause], LoopClauses], Clauses),
     clauses_atom(Clauses, OutputAtom).
@@ -150,37 +150,43 @@ group_unary_facts(Facts, Grouped) :-
         Grouped).
 
 % Rule C — Nested findall + member (flatten_loop_pipeline optimisation)
-supported_generator((findall(Inner, InnerGoal, List), member(Item, List)), Clauses, Facts, BaseName, Inner, true) :-
+supported_generator((findall(Inner, InnerGoal, List), member(Item, List)), Clauses, Facts, Source, Inner, true) :-
     !,
     Item = Inner,
-    supported_generator(InnerGoal, Clauses, Facts, BaseName, Inner, true).
+    supported_generator(InnerGoal, Clauses, Facts, Source, Inner, true).
 
 % Rule B — Generator followed by a transform
-supported_generator((Generator, Transform), Clauses, Facts, BaseName, ItemVar, Transform) :-
+supported_generator((Generator, Transform), Clauses, Facts, Source, ItemVar, Transform) :-
     !,
-    supported_generator(Generator, Clauses, Facts, BaseName, ItemVar, true).
+    supported_generator(Generator, Clauses, Facts, Source, ItemVar, true).
+
+% Rule B — Direct list generator
+supported_generator(member(ItemVar, List), _Clauses, _Facts, input_list(List), ItemVar, true) :-
+    !.
 
 % Rule B — Simple unary fact generator
-supported_generator(Generator, _Clauses, Facts, BaseName, ItemVar, true) :-
+supported_generator(Generator, _Clauses, Facts, base_list(BaseName), ItemVar, true) :-
     Generator =.. [Pred, ItemVar],
     member(Fact, Facts),
     Fact =.. [Pred, _],
     base_list_name(Pred, BaseName).
 
 % Rule D — Splice a supported nested predicate (splice_supported_nested_predicate optimisation)
-supported_generator(Goal, Clauses, Facts, BaseName, ItemVar, Transform) :-
+supported_generator(Goal, Clauses, Facts, Source, ItemVar, Transform) :-
     Goal =.. [Pred | _],
     Pred \= ',',
     \+ (member(Fact, Facts), functor(Fact, Pred, _)),
     member((Goal :- Body), Clauses),
-    supported_generator(Body, Clauses, Facts, BaseName, ItemVar, Transform).
+    supported_generator(Body, Clauses, Facts, Source, ItemVar, Transform).
 
 base_list_name(Pred, BaseName) :-
     atom_concat(Pred, s, BaseName).
 
-main_clause(Head, BaseName, Result, LoopName, (Head :- (BaseCall, LoopCall))) :-
+main_clause(Head, base_list(BaseName), Result, LoopName, (Head :- (BaseCall, LoopCall))) :-
     BaseCall =.. [BaseName, Xs],
     LoopCall =.. [LoopName, Xs, Result].
+main_clause(Head, input_list(List), Result, LoopName, (Head :- LoopCall)) :-
+    LoopCall =.. [LoopName, List, Result].
 
 loop_clauses(LoopName, ItemVar, Template, Transform, [BaseClause, StepClause]) :-
     BaseClause =.. [LoopName, [], []],
