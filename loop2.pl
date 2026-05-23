@@ -44,7 +44,9 @@ loop2_emit(plan(BaseLists, Pipelines), OutputAtom) :-
     emit_base_list_clauses(BaseLists, BaseListClauses),
     emit_pipelines(Pipelines, PipelineClauses),
     append(BaseListClauses, PipelineClauses, AllClauses),
-    clauses_atom(AllClauses, OutputAtom).
+    clauses_atom(AllClauses, ClausesAtom),
+    correctness_claim_header(Header),
+    string_concat(Header, ClausesAtom, OutputAtom).
 
 emit_pipelines([], []).
 emit_pipelines([Pipeline|Rest], Clauses) :-
@@ -252,3 +254,9 @@ write_clauses([Clause|Rest]) :-
 
 unsupported_output(Reason, OutputAtom) :-
     format(string(OutputAtom), '%% unsupported(reason(~w)).\n', [Reason]).
+
+correctness_claim_header(Header) :-
+    Header =
+        '%% correctness(claimed_for(finite_pure_supported_generator_patterns)).\n\
+%% preserves([finite_result_list, order, simple_transformations, deterministic_single_success]).\n\
+%% not_preserved(full_prolog_backtracking_semantics).\n'.
