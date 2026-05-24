@@ -40,327 +40,208 @@ The generated code is intended to be:
 
 ⸻
 
-Features
+Example Commands
 
-Supported
+Here are practical examples and commands for what loop2 can do.
 
-Direct fact generators
+1. Load loop2
+
+?- [loop2].
+
+2. Convert facts + findall/3 to a loop
+
+Input:
 
 colour(red).
 colour(blue).
 p(R) :-
     findall(X, colour(X), R).
 
-member/2 generators
+Command:
 
+?- loop2_translate("
+colour(red).
+colour(blue).
 p(R) :-
-    findall([X,X], member(X, List), R).
+    findall(X, colour(X), R).
+", Out),
+writeln(Out).
 
-Simple transformations
+Expected kind of output:
 
-Y = c-X
-Y is X + 1
-Y = [X,X]
+%% correctness(claimed_for(finite_pure_supported_generator_patterns)).
+%% preserves([finite_result_list,order,simple_transformations,deterministic_single_success]).
+%% not_preserved(full_prolog_backtracking_semantics).
+colours([red,blue]).
+p(A):-colours(B),loop001(B,A).
+loop001([],[]).
+loop001([A|B],[A|C]):-loop001(B,C).
 
-Nested findall + member flattening
+3. Convert member/2 over a list
 
-findall([Y,Y],
-    (findall(X, colour(X), Xs),
-     member(Y, Xs)),
-    R)
+Command:
 
-becomes a single-pass loop.
+?- loop2_translate("
+p(R) :-
+    findall([X,X], member(X, [a,b,c]), R).
+", Out),
+writeln(Out).
 
-Simple predicate splicing
+Expected output shape:
 
+p(A) :-
+    loop001([a,b,c], A).
+loop001([], []).
+loop001([X|Xs], [[X,X]|Ys]) :-
+    loop001(Xs, Ys).
+
+4. Convert a transformation
+
+Command:
+
+?- loop2_translate("
+num(1).
+num(2).
+num(3).
+double_all(R) :-
+    findall(Y, (num(X), Y is X * 2), R).
+", Out),
+writeln(Out).
+
+Expected output shape:
+
+nums([1,2,3]).
+double_all(R) :-
+    nums(Xs),
+    loop001(Xs, R).
+loop001([], []).
+loop001([X|Xs], [Y|Ys]) :-
+    Y is X * 2,
+    loop001(Xs, Ys).
+
+5. Flatten nested findall + member
+
+Command:
+
+?- loop2_translate("
+colour(red).
+colour(blue).
+p(R) :-
+    findall([Y,Y],
+        (findall(X, colour(X), Xs),
+         member(Y, Xs)),
+        R).
+", Out),
+writeln(Out).
+
+Expected idea:
+
+colours([red,blue]).
+p(R) :-
+    colours(Xs),
+    loop001(Xs, R).
+loop001([], []).
+loop001([X|Xs], [[X,X]|Ys]) :-
+    loop001(Xs, Ys).
+
+This is the main “flatten and splice” feature.
+
+6. Splice a simple nested predicate
+
+Input:
+
+colour(red).
+colour(blue).
 q(Z) :-
     colour(X),
     Z = c-X.
+p(R) :-
+    findall(Z, q(Z), R).
 
-can be inlined into a loop pipeline.
+Command:
 
-⸻
+?- loop2_translate("
+colour(red).
+colour(blue).
+q(Z) :-
+    colour(X),
+    Z = c-X.
+p(R) :-
+    findall(Z, q(Z), R).
+", Out),
+writeln(Out).
 
-Unsupported
+Expected idea:
 
-loop2 intentionally rejects more complex Prolog constructs.
+colours([red,blue]).
+p(R) :-
+    colours(Xs),
+    loop001(Xs, R).
+loop001([], []).
+loop001([X|Xs], [Z|Zs]) :-
+    Z = c-X,
+    loop001(Xs, Zs).
 
-Unsupported constructs produce:
+7. Translate a file
 
-%% unsupported(reason(...)).
-
-Unsupported:
-
-!
-;
-->
-\+
-call/1
-assert/retract
-repeat
-side effects
-infinite generators
-meta-calls
-
-This project is deliberately minimal.
-
-⸻
-
-Example
-
-Input
+Create input.pl:
 
 colour(red).
 colour(blue).
 p(R) :-
-    findall(Y,
-        (colour(X),
-         Y = c-X),
-        R).
+    findall(X, colour(X), R).
 
-⸻
-
-Output
-
-%% correctness(claimed_for(finite_pure_supported_generator_patterns)).
-%% preserves([finite_result_list, order, simple_transformations, deterministic_single_success]).
-%% not_preserved(full_prolog_backtracking_semantics).
-colours([red, blue]).
-p(R) :-
-    colours(A),
-    loop001(A, R).
-loop001([], []).
-loop001([X|Xs], [Y|Ys]) :-
-    Y = c-X,
-    loop001(Xs, Ys).
-
-⸻
-
-Installation
-
-SWI-Prolog
-
-swipl
-
-Load the module:
-
-?- [loop2].
-
-⸻
-
-API
-
-loop2_translate/2
-
-Translate Prolog source text.
-
-loop2_translate(+InputAtom, -OutputAtom)
-
-Example:
-
-?- loop2_translate(
-       "p(R):-findall(X,colour(X),R).",
-       Output).
-
-⸻
-
-loop2_file/2
-
-Translate a file.
-
-loop2_file(+InputFile, +OutputFile)
-
-Example:
+Run:
 
 ?- loop2_file('input.pl', 'output.pl').
 
-⸻
+Then inspect:
 
-loop2_analyse/2
+?- read_file_to_string('output.pl', S, []), writeln(S).
 
-Generate an intermediate plan representation.
+8. Analyse only
 
-loop2_analyse(+Input, -Plan)
+?- loop2_analyse("
+colour(red).
+colour(blue).
+p(R) :- findall(X, colour(X), R).
+", Plan).
 
-Example IR:
+Expected shape:
 
-plan(
-    [base_list(colours, [red, blue])],
-    [pipeline(...)]
-)
+Plan = plan(
+    [base_list(colours,[red,blue])],
+    [pipeline(p(_), base_list(colours), [loop(...)], _)]
+).
 
-⸻
+9. Unsupported example
 
-loop2_emit/2
+Command:
 
-Emit deterministic Prolog from a plan.
+?- loop2_translate("
+p(R) :-
+    findall(X, (colour(X), !), R).
+", Out),
+writeln(Out).
 
-loop2_emit(+Plan, -OutputAtom)
+Expected:
 
-⸻
+%% unsupported(reason(cut)).
 
-Optimisation Passes
+10. What it can prove by running output
 
-loop2 currently implements three minimal optimisation passes.
+After translation, save output to output.pl, then:
 
-⸻
+?- [output].
+?- p(R).
 
-1. findall_to_loop
+For colours:
 
-Converts:
+R = [red, blue].
 
-findall(X, colour(X), R)
+For duplication:
 
-into:
-
-colours(Xs),
-loop001(Xs, R)
-
-⸻
-
-2. flatten_loop_pipeline
-
-Converts nested:
-
-findall(Y,
-    (findall(X, colour(X), Xs),
-     member(Y, Xs)),
-    R)
-
-into a single loop pipeline.
-
-⸻
-
-3. splice_supported_nested_predicate
-
-Inlines supported predicates:
-
-q(Z) :-
-    colour(X),
-    Z = c-X.
-
-into the current loop transform.
-
-⸻
-
-Generated Loop Structure
-
-Generated loops follow this structure:
-
-loop001([], []).
-loop001([X|Xs], [Y|Ys]) :-
-    Transform,
-    loop001(Xs, Ys).
-
-This replaces nondeterministic collection with deterministic recursion.
-
-⸻
-
-Correctness Model
-
-loop2 only claims correctness for:
-
-finite
-pure
-supported
-generator patterns
-
-Preserved:
-
-- finite result list
-- order
-- simple transformations
-- deterministic single success
-
-Not preserved:
-
-- full Prolog backtracking semantics
-- cuts
-- choicepoint behaviour
-- meta-level execution
-
-⸻
-
-Internal Pipeline
-
-parse_input
-    ->
-detect_unsupported
-    ->
-loop2_analyse
-    ->
-optimisation passes
-    ->
-loop2_emit
-
-⸻
-
-Design Goals
-
-loop2 is intended as:
-
-* a minimal educational compiler
-* a preprocessing stage for pl2c/pl2js
-* a deterministic subset extractor
-* a loop fusion experiment
-* a recursive-to-iterative transformation system
-
-⸻
-
-Future Work
-
-Possible future extensions:
-
-* multiple loop fusion
-* accumulator optimisation
-* tail recursion conversion
-* nested list flattening
-* recursive pipeline chaining
-* Spec-to-Algorithm integration
-* pl2js/pl2c backend integration
-* recursive generator compression
-* Gaussian elimination loop optimisation
-
-⸻
-
-Example Transformation Classes
-
-Fact Generator
-
-findall(X, colour(X), R)
-
-↓
-
-colours(Xs),
-loop001(Xs, R)
-
-⸻
-
-Mapping
-
-findall(Y,
-    (colour(X),
-     Y = c-X),
-    R)
-
-↓
-
-loop001([X|Xs], [Y|Ys]) :-
-    Y = c-X,
-    loop001(Xs, Ys).
-
-⸻
-
-Duplication
-
-findall([X,X],
-    member(X, List),
-    R)
-
-↓
-
-loop001([X|Xs], [[X,X]|Ys]) :-
-    loop001(Xs, Ys).
+R = [[red, red], [blue, blue]].
 
 ⸻
 
