@@ -1,3 +1,4 @@
+```
 loop2
 
 Minimal deterministic Prolog loop compiler.
@@ -254,3 +255,4 @@ BSD 3-Clause License.
 Author
 
 Lucian Green
+```
