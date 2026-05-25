@@ -245,12 +245,17 @@ clauses_atom(Clauses, OutputAtom) :-
 
 write_clauses([]).
 write_clauses([Clause]) :-
-    write_term(Clause, [numbervars(true)]),
+    write_clause_with_letter_vars(Clause),
     write('.\n').
 write_clauses([Clause|Rest]) :-
-    write_term(Clause, [numbervars(true)]),
+    write_clause_with_letter_vars(Clause),
     write('.\n'),
     write_clauses(Rest).
+
+write_clause_with_letter_vars(Clause) :-
+    copy_term(Clause, NumberedClause),
+    numbervars(NumberedClause, 0, _),
+    write_term(NumberedClause, [numbervars(true)]).
 
 unsupported_output(Reason, OutputAtom) :-
     format(string(OutputAtom), '%% unsupported(reason(~w)).\n', [Reason]).
