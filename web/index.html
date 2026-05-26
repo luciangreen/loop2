@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>loop2 — Prolog loop translator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header>
+  <h1>loop2</h1>
+  <p>Translate simple nondeterministic Prolog into deterministic recursive loops</p>
+</header>
+
+<main>
+
+  <!-- Example snippets -->
+  <div class="examples">
+    <span>Examples:</span>
+
+    <button data-example="facts-findall">facts + findall</button>
+    <button data-example="member">member/2 loop</button>
+    <button data-example="transform">arithmetic transform</button>
+    <button data-example="nested">nested findall flatten</button>
+    <button data-example="splice">predicate splice</button>
+    <button data-example="unsupported">unsupported (cut)</button>
+  </div>
+
+  <!-- Editors -->
+  <div class="editor-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <span>Input Prolog</span>
+        <button id="clear-btn" style="font-size:0.75rem;padding:0.2rem 0.5rem;cursor:pointer;background:transparent;border:1px solid var(--border);border-radius:4px;">clear</button>
+      </div>
+      <textarea id="input" spellcheck="false" placeholder="Paste Prolog clauses here…"></textarea>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header"><span>Translated Output</span></div>
+      <div id="output" role="region" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button id="translate-btn">Translate</button>
+    <button id="copy-btn">Copy output</button>
+  </div>
+
+  <!-- Info -->
+  <section class="info">
+    <h2>What loop2 supports</h2>
+    <ul>
+      <li><strong>Rule A</strong> — facts to list predicate: <code>colour(red). colour(blue).</code> → <code>colours([red,blue]).</code></li>
+      <li><strong>Rule B</strong> — <code>findall/3</code> over a fact generator → explicit <code>loop001/2</code> recursion</li>
+      <li><strong>Rule C</strong> — nested <code>findall</code> + <code>member/2</code> flattened into a single loop</li>
+      <li><strong>Rule D</strong> — simple one-clause predicate body spliced inline</li>
+      <li>Transforms: <code>Y is X * 2</code>, <code>Y = f(X)</code>, <code>Y = [X,X]</code>, etc.</li>
+      <li>Explicitly rejects: <code>!</code>, <code>;</code>, <code>-></code>, <code>\+</code>, <code>call/N</code>, assert/retract, side-effects</li>
+    </ul>
+  </section>
+
+</main>
+
+<script src="loop2.js"></script>
+<script>
+// ── Example programs ──────────────────────────────────────────────────
+const EXAMPLES = {
+  'facts-findall': `\
+colour(red).
+colour(blue).
+colour(green).
+p(R) :-
+    findall(X, colour(X), R).
+`,
+  'member': `\
+p(R) :-
+    findall([X,X], member(X, [a,b,c]), R).
+`,
+  'transform': `\
+num(1).
+num(2).
+num(3).
+double_all(R) :-
+    findall(Y, (num(X), Y is X * 2), R).
+`,
+  'nested': `\
+colour(red).
+colour(blue).
+p(R) :-
+    findall([Y,Y],
+        (findall(X, colour(X), Xs),
+         member(Y, Xs)),
+        R).
+`,
+  'splice': `\
+colour(red).
+colour(blue).
+q(Z) :-
+    colour(X),
+    Z = c-X.
+p(R) :-
+    findall(Z, q(Z), R).
+`,
+  'unsupported': `\
+p(R) :-
+    findall(X, (colour(X), !), R).
+`,
+};
+
+// ── DOM refs ─────────────────────────────────────────────────────────
+const inputEl  = document.getElementById('input');
+const outputEl = document.getElementById('output');
+const transBtn = document.getElementById('translate-btn');
+const copyBtn  = document.getElementById('copy-btn');
+const clearBtn = document.getElementById('clear-btn');
+
+// ── Translate ────────────────────────────────────────────────────────
+function runTranslate() {
+  const text = inputEl.value;
+  if (!text.trim()) { outputEl.textContent = ''; outputEl.className = ''; return; }
+
+  const result = loop2Translate(text);
+  outputEl.textContent = result;
+
+  if (result.startsWith('%% unsupported') || result.startsWith('%% parse_error')) {
+    outputEl.className = 'unsupported';
+  } else {
+    outputEl.className = 'success';
+  }
+}
+
+transBtn.addEventListener('click', runTranslate);
+
+inputEl.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runTranslate();
+});
+
+// ── Clear ────────────────────────────────────────────────────────────
+clearBtn.addEventListener('click', () => {
+  inputEl.value = '';
+  outputEl.textContent = '';
+  outputEl.className = '';
+});
+
+// ── Copy ─────────────────────────────────────────────────────────────
+copyBtn.addEventListener('click', () => {
+  const txt = outputEl.textContent;
+  if (!txt) return;
+  navigator.clipboard.writeText(txt).then(() => {
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => { copyBtn.textContent = 'Copy output'; }, 1500);
+  });
+});
+
+// ── Load example ────────────────────────────────────────────────────
+document.querySelectorAll('[data-example]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.getAttribute('data-example');
+    inputEl.value = EXAMPLES[key] || '';
+    runTranslate();
+  });
+});
+
+// ── Load first example on startup ───────────────────────────────────
+inputEl.value = EXAMPLES['facts-findall'];
+runTranslate();
+</script>
+
+</body>
+</html>
