@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 ```
 loop2 — Prolog Program Requirements
 
@@ -201,8 +200,3 @@ It does not claim to preserve full Prolog backtracking semantics.
 
 loop2 is a minimal Prolog-to-Prolog translator that converts simple nondeterministic Prolog patterns into deterministic recursive loop predicates. It combines findall/3 elimination, loop flattening, and simple nested predicate splicing to produce clearer deterministic Prolog for education, optimisation, and later pl2c/pl2js compilation.
 ```
-=======
-# loop2
-
-loop2 is a minimal Prolog-to-Prolog translator that converts simple nondeterministic Prolog patterns into deterministic recursive loop predicates. It combines `findall/3` elimination, loop flattening, and simple nested predicate splicing to produce clearer deterministic Prolog for education, optimisation, and later pl2c/pl2js compilation.
->>>>>>> e25d7b746ee1c1c6c5280ba28004c80d89b58c36
