@@ -289,6 +289,10 @@ For duplication:
 R = [[red, red], [blue, blue]].
 ```
 
+## Youtube Video
+
+[Youtube video](https://www.youtube.com/watch?v=pjEe4pgSKCg&t=0s)
+
 ## License
 
 BSD 3-Clause License.
