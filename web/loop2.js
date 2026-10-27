@@ -64,6 +64,7 @@ function tokenize(text) {
     if (c === '/' && i + 1 < n && text[i + 1] === '*') {
       i += 2;
       while (i < n && !(text[i] === '*' && i + 1 < n && text[i + 1] === '/')) i++;
+      if (i >= n) throw new Error('Unterminated block comment');
       i += 2;
       continue;
     }
@@ -84,11 +85,13 @@ function tokenize(text) {
     if (c === "'") {
       i++;
       let s = '';
+      let closed = false;
       while (i < n) {
         if (text[i] === "'" && i + 1 < n && text[i + 1] === "'") { s += "'"; i += 2; }
-        else if (text[i] === "'") { i++; break; }
+        else if (text[i] === "'") { i++; closed = true; break; }
         else s += text[i++];
       }
+      if (!closed) throw new Error('Unterminated quoted atom');
       toks.push({t: 'atom', v: s});
       continue;
     }
@@ -148,7 +151,7 @@ function tokenize(text) {
       continue;
     }
 
-    i++; // skip unknown character
+    throw new Error(`Unexpected character: ${c}`);
   }
 
   toks.push({t: 'eof'});
@@ -430,6 +433,24 @@ function clauseFacts(clauses) {
 
 function baseListName(pred) { return pred + 's'; }
 
+function isArithmeticExpression(term) {
+  if (term.tag === 'num' || term.tag === 'var') return true;
+  if (term.tag !== 'compound') return false;
+
+  if (term.args.length === 1 && ['+', '-'].includes(term.functor))
+    return isArithmeticExpression(term.args[0]);
+  return term.args.length === 2 &&
+    ['+', '-', '*', '/', '//', 'mod', 'rem', '**', '^'].includes(term.functor) &&
+    term.args.every(isArithmeticExpression);
+}
+
+function isSupportedTransform(term) {
+  if (term.tag === 'atom' && term.name === 'true') return true;
+  if (term.tag !== 'compound' || term.args.length !== 2) return false;
+  if (term.functor === '=') return true;
+  return term.functor === 'is' && isArithmeticExpression(term.args[1]);
+}
+
 function collectBaseLists(facts) {
   const grouped = new Map();
   for (const f of facts) {
@@ -466,7 +487,7 @@ function findallToLoop(goal, clauses, facts, visited) {
   if (goal.tag === 'compound' && goal.functor === ',' && goal.args.length === 2) {
     const [gen, transform] = goal.args;
     const inner = supportedGenerator(gen, clauses, facts, visited);
-    if (inner && inner.transform === null)
+    if (inner && inner.transform === null && isSupportedTransform(transform))
       return {source: inner.source, itemVar: inner.itemVar, transform};
   }
 

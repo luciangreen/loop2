@@ -289,6 +289,52 @@ For duplication:
 R = [[red, red], [blue, blue]].
 ```
 
+## Features and Current Boundaries
+
+| Feature | Status | Notes |
+|---|---|---|
+| Unary facts to ordered list predicates | Implemented | For example, `colour(red).` and `colour(blue).` become `colours([red,blue]).` |
+| `findall/3` over a unary fact predicate or `member/2` | Implemented | Emits a deterministic recursive `loopNNN/2`. |
+| Simple transforms | Implemented | Supports unification (`=`) and arithmetic evaluation (`is`) over variables, numbers, and basic arithmetic operators. |
+| Nested `findall` followed by `member` | Implemented | Fuses the supported pattern into one loop. |
+| Splicing a supported one-clause predicate | Implemented | Supports a single fact/list generator with an optional simple transform. |
+| Unsupported control flow and side effects | Implemented | Reports cuts, disjunction, conditionals, negation, meta-calls, dynamic database updates, I/O, and related unsupported constructs. |
+| Multiple dependent generators / multi-stage loop pipelines | Not implemented | Such goals are rejected rather than emitted as nondeterministic loop bodies. |
+| General Prolog semantics | Not implemented | No general backtracking, arbitrary predicates, infinite generators, or complete Prolog parser/compiler. |
+
+Both `loop2.pl` and the browser translator support the implemented patterns. The browser parser reports malformed input as `%% parse_error(...)`; unsupported or out-of-scope input produces `%% unsupported(reason(...)).`. Generated output only claims correctness for finite, pure supported patterns and does not preserve general Prolog backtracking semantics.
+
+## Run the Tests
+
+The browser translator's regression suite uses only Node.js built-in modules; no package installation is needed:
+
+```sh
+node --test
+```
+
+The tests cover fact and `member/2` generators, transforms, nested-loop flattening, predicate splicing, unsupported constructs, malformed input, and the correctness-claim header.
+
+To try the browser UI locally, serve the `web` directory and open the shown local URL:
+
+```sh
+python3 -m http.server 8000 --directory web
+```
+
+To try the Prolog API, install SWI-Prolog, then start its interactive prompt from the repository root:
+
+```sh
+swipl -q
+```
+
+At the prompt, load the module and run a translation:
+
+```prolog
+?- [loop2].
+?- loop2_translate("colour(red). colour(blue). p(R) :- findall(X, colour(X), R).", Out), writeln(Out).
+```
+
+The automated regression suite currently exercises the browser/JavaScript implementation. The Prolog module has the same documented translation features, but does not yet have a checked-in automated test suite.
+
 ## Youtube Video
 
 [Youtube video](https://www.youtube.com/watch?v=pjEe4pgSKCg&t=0s)

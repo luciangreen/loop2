@@ -185,6 +185,31 @@ group_unary_facts(Facts, Grouped) :-
 
 % Optimisation: findall_to_loop
 % Converts a direct member/fact generator, with optional transform, to a loop source.
+supported_transform(true).
+supported_transform(Transform) :-
+    nonvar(Transform),
+    functor(Transform, '=', 2).
+supported_transform(Transform) :-
+    nonvar(Transform),
+    Transform =.. [is, _, Expression],
+    arithmetic_expression(Expression).
+
+arithmetic_expression(Expression) :-
+    number(Expression),
+    !.
+arithmetic_expression(Expression) :-
+    var(Expression),
+    !.
+arithmetic_expression(Expression) :-
+    Expression =.. [Operator, Operand],
+    memberchk(Operator, ['+', '-']),
+    arithmetic_expression(Operand).
+arithmetic_expression(Expression) :-
+    Expression =.. [Operator, Left, Right],
+    memberchk(Operator, ['+', '-', '*', '/', '//', mod, rem, '**', '^']),
+    arithmetic_expression(Left),
+    arithmetic_expression(Right).
+
 findall_to_loop(member(ItemVar, List), _Clauses, _Facts,
                 input_list(List), ItemVar, true) :- !.
 findall_to_loop(Generator, _Clauses, Facts, base_list(BaseName), ItemVar, true) :-
@@ -194,6 +219,7 @@ findall_to_loop(Generator, _Clauses, Facts, base_list(BaseName), ItemVar, true) 
     !,
     base_list_name(Pred, BaseName).
 findall_to_loop((Generator, Transform), Clauses, Facts, Source, ItemVar, Transform) :-
+    supported_transform(Transform),
     supported_generator(Generator, Clauses, Facts, Source, ItemVar, true).
 
 % Optimisation: flatten_loop_pipeline
